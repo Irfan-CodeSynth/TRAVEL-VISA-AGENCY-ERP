@@ -113,4 +113,4 @@ Open http://localhost:5173. The seed dataset creates staff logins (password `Sta
 
 ## License
 
-No license file is included yet — all rights reserved by the repository owner unless stated otherwise.
+Distributed under the **MIT License**. See [LICENSE](./LICENSE) for details.
