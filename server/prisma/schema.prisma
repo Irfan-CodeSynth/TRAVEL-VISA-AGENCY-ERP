@@ -1,0 +1,1199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleType {
+  INTERNAL
+  EXTERNAL
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum LoginStatus {
+  SUCCESS
+  FAILED
+  LOCKED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  STATUS_CHANGE
+  PASSWORD_CHANGE
+  PERMISSION_CHANGE
+}
+
+enum LeadSource {
+  WEBSITE
+  WALK_IN
+  REFERRAL
+  PHONE
+  SOCIAL_MEDIA
+  PARTNER_AGENT
+  EVENT
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  WON
+  LOST
+}
+
+enum CustomerType {
+  INDIVIDUAL
+  COMPANY
+}
+
+enum CustomerStatus {
+  ACTIVE
+  VIP
+  INACTIVE
+  BLACKLISTED
+}
+
+enum Channel {
+  CALL
+  WHATSAPP
+  EMAIL
+  SMS
+  VISIT
+  MEETING
+}
+
+enum FollowUpStatus {
+  PENDING
+  COMPLETED
+  MISSED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Company {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  logo      String?
+  domain    String?
+  settings  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  branches  Branch[]
+}
+
+model Branch {
+  id        String    @id @default(uuid()) @db.Uuid
+  companyId String    @db.Uuid
+  company   Company   @relation(fields: [companyId], references: [id])
+  name      String
+  code      String    @unique
+  address   String?
+  city      String?
+  country   String?
+  phone     String?
+  email     String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  users           User[]
+  branchUserRoles BranchUserRole[]
+  settings        Setting[]
+  customers       Customer[]
+  leads           Lead[]
+  followUps       FollowUp[]
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  branchId     String?   @db.Uuid
+  branch       Branch?   @relation(fields: [branchId], references: [id])
+  email        String    @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String?
+  avatar       String?
+  gender       Gender?
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  userRoles       UserRole[]
+  branchUserRoles BranchUserRole[]
+  sessions        UserSession[]
+  loginHistory    LoginHistory[]
+  auditLogs       AuditLog[]
+  activityLogs    ActivityLog[]
+  assignedCustomers Customer[]     @relation("CustomerAssignee")
+  createdCustomers  Customer[]     @relation("CustomerCreator")
+  assignedLeads     Lead[]         @relation("LeadAssignee")
+  createdLeads      Lead[]         @relation("LeadCreator")
+  assignedFollowUps FollowUp[]     @relation("FollowUpAssignee")
+  createdFollowUps  FollowUp[]     @relation("FollowUpCreator")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  displayName String
+  description String?
+  roleType    RoleType @default(INTERNAL)
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+  branchUserRoles BranchUserRole[]
+}
+
+model Permission {
+  id          String  @id @default(uuid()) @db.Uuid
+  module      String
+  action      String
+  resource    String
+  description String?
+
+  rolePermissions RolePermission[]
+
+  @@unique([module, action, resource])
+}
+
+model RolePermission {
+  id           String     @id @default(uuid()) @db.Uuid
+  roleId       String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String     @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model UserRole {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId String @db.Uuid
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model BranchUserRole {
+  id       String @id @default(uuid()) @db.Uuid
+  branchId String @db.Uuid
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  userId   String @db.Uuid
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId   String @db.Uuid
+  role     Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, userId, roleId])
+}
+
+model UserSession {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @db.Uuid
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String
+  ipAddress        String?
+  userAgent        String?
+  deviceId         String?
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+  @@index([refreshTokenHash])
+}
+
+model LoginHistory {
+  id            String      @id @default(uuid()) @db.Uuid
+  userId        String      @db.Uuid
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress     String?
+  userAgent     String?
+  status        LoginStatus
+  failureReason String?
+  createdAt     DateTime    @default(now())
+}
+
+model AuditLog {
+  id          String      @id @default(uuid()) @db.Uuid
+  userId      String?     @db.Uuid
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      AuditAction
+  entityType  String
+  entityId    String?
+  description String?
+  beforeData  Json?
+  afterData   Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime    @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String?  @db.Uuid
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  entityType  String
+  entityId    String
+  action      String
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+}
+
+model Setting {
+  id          String   @id @default(uuid()) @db.Uuid
+  branchId    String?  @db.Uuid
+  branch      Branch?  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  group       String
+  key         String
+  value       Json
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([branchId, group, key])
+}
+
+model Currency {
+  id           String   @id @default(uuid()) @db.Uuid
+  code         String   @unique @db.VarChar(3)
+  name         String
+  symbol       String
+  exchangeRate Decimal  @default(1) @db.Decimal(12, 2)
+  isDefault    Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  updatedAt    DateTime @updatedAt
+
+  leads Lead[] @relation("LeadBudget")
+
+  flightFares FlightFare[]
+}
+
+model Sequence {
+  id           String @id @default(uuid()) @db.Uuid
+  entity       String @unique
+  prefix       String
+  currentValue Int    @default(0)
+  format       String
+}
+
+model Country {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(3)
+  name      String
+  region    String?
+  flagEmoji String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers      Customer[] @relation("CustomerNationality")
+  leads          Lead[]     @relation("LeadInterestedDestination")
+  visaTypes      VisaType[]
+}
+
+model Customer {
+  id             String         @id @default(uuid()) @db.Uuid
+  customerNumber String         @unique
+  branchId       String         @db.Uuid
+  branch         Branch         @relation(fields: [branchId], references: [id])
+  customerType   CustomerType   @default(INDIVIDUAL)
+  firstName      String?
+  lastName       String?
+  companyName    String?
+  phone          String
+  whatsapp       String?
+  email          String?
+  nationalId     String?
+  passportNumber String?
+  passportExpiry DateTime?
+  gender         Gender?
+  dateOfBirth    DateTime?
+  nationalityCountryId String? @db.Uuid
+  nationalityCountry   Country?  @relation("CustomerNationality", fields: [nationalityCountryId], references: [id], onDelete: SetNull)
+  occupation     String?
+  city           String?
+  address        String?
+  status         CustomerStatus @default(ACTIVE)
+  source         LeadSource?
+  assignedToUserId String?     @db.Uuid
+  assignedToUser   User?       @relation("CustomerAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  createdById    String?       @db.Uuid
+  createdBy      User?         @relation("CustomerCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  lead          Lead?           @relation("LeadConversion")
+  followUps     FollowUp[]
+
+  applications   Application[]
+  appointments   Appointment[]   @relation("AppointmentCustomer")
+  bookings       Booking[]
+  quotations     Quotation[]
+  invoices       Invoice[]
+  documents      Document[]      @relation("DocumentCustomer")
+  communications Communication[] @relation("CommCustomer")
+
+  @@index([branchId])
+  @@index([phone])
+  @@index([email])
+  @@index([assignedToUserId])
+  @@index([deletedAt])
+}
+
+model Lead {
+  id                String      @id @default(uuid()) @db.Uuid
+  leadNumber        String      @unique
+  branchId          String      @db.Uuid
+  branch            Branch      @relation(fields: [branchId], references: [id])
+  firstName         String
+  lastName          String?
+  companyName       String?
+  phone             String
+  email             String?
+  whatsapp          String?
+  source            LeadSource  @default(WEBSITE)
+  status            LeadStatus  @default(NEW)
+  interestedDestinationId String? @db.Uuid
+  interestedDestination     Country?  @relation("LeadInterestedDestination", fields: [interestedDestinationId], references: [id], onDelete: SetNull)
+  estimatedBudget   Decimal?    @db.Decimal(12, 2)
+  budgetCurrencyCode String?
+  budgetCurrency     Currency?  @relation("LeadBudget", fields: [budgetCurrencyCode], references: [code], onDelete: SetNull)
+  servicesInterested String?
+  description       String?
+  notes             String?
+  assignedToUserId  String?     @db.Uuid
+  assignedToUser    User?       @relation("LeadAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  createdById       String?     @db.Uuid
+  createdBy         User?       @relation("LeadCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  convertedCustomerId String?   @unique @db.Uuid
+  convertedCustomer   Customer? @relation("LeadConversion", fields: [convertedCustomerId], references: [id], onDelete: SetNull)
+  convertedAt       DateTime?
+  lostReason        String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  deletedAt         DateTime?
+
+  followUps FollowUp[]
+  communications Communication[] @relation("CommLead")
+
+  @@index([status])
+  @@index([branchId])
+  @@index([assignedToUserId])
+}
+
+model FollowUp {
+  id               String         @id @default(uuid()) @db.Uuid
+  branchId         String         @db.Uuid
+  branch           Branch         @relation(fields: [branchId], references: [id])
+  type             Channel        @default(CALL)
+  subject          String
+  notes            String?
+  scheduledAt      DateTime
+  completedAt      DateTime?
+  status           FollowUpStatus @default(PENDING)
+  priority         Priority       @default(MEDIUM)
+  customerId       String?        @db.Uuid
+  customer         Customer?      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  leadId           String?        @db.Uuid
+  lead             Lead?          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedToUserId String?        @db.Uuid
+  assignedToUser   User?          @relation("FollowUpAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  createdById      String?        @db.Uuid
+  createdBy        User?          @relation("FollowUpCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+
+  @@index([assignedToUserId, status, scheduledAt])
+  @@index([customerId])
+  @@index([leadId])
+  @@index([branchId])
+}
+
+// =====================================================================
+// VISA (M2)
+// =====================================================================
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  AT_EMBASSY
+  ADDITIONAL_DOCS
+  APPROVED
+  REJECTED
+  RETURNED
+  WITHDRAWN
+}
+
+enum AppointmentType {
+  BIOMETRICS
+  INTERVIEW
+  MEDICAL
+  DOCUMENT_SUBMISSION
+  COLLECTION
+  OTHER
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  MISSED
+  RESCHEDULED
+  CANCELLED
+}
+
+model VisaType {
+  id               String    @id @default(uuid()) @db.Uuid
+  countryId        String    @db.Uuid
+  country          Country   @relation(fields: [countryId], references: [id])
+  code             String
+  name             String
+  category         String?
+  allowedStayDays  Int?
+  validityDays     Int?
+  processingDays   Int?
+  price            Decimal?  @db.Decimal(12, 2)
+  currencyCode     String    @default("USD")
+  requirements     String?
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  applications Application[]
+
+  @@unique([countryId, code])
+  @@index([countryId])
+}
+
+model Application {
+  id                String            @id @default(uuid()) @db.Uuid
+  applicationNumber String            @unique
+  branchId          String            @db.Uuid
+  customerId        String            @db.Uuid
+  customer          Customer          @relation(fields: [customerId], references: [id])
+  visaTypeId        String            @db.Uuid
+  visaType          VisaType          @relation(fields: [visaTypeId], references: [id])
+  status            ApplicationStatus @default(DRAFT)
+  applicantCount    Int               @default(1)
+  submissionDate    DateTime?
+  decisionDate      DateTime?
+  referenceNumber   String?
+  totalFees         Decimal?          @db.Decimal(12, 2)
+  currencyCode      String            @default("USD")
+  notes             String?
+  assignedToUserId  String?           @db.Uuid
+  createdById       String?           @db.Uuid
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  deletedAt         DateTime?
+
+  statusLogs     ApplicationStatusLog[]
+  appointments   Appointment[]
+  documents      Document[]
+  communications Communication[]
+
+  @@index([customerId])
+  @@index([visaTypeId])
+  @@index([status])
+  @@index([branchId])
+}
+
+model ApplicationStatusLog {
+  id                String             @id @default(uuid()) @db.Uuid
+  applicationId     String             @db.Uuid
+  application       Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromStatus        ApplicationStatus?
+  toStatus          ApplicationStatus
+  note              String?
+  changedByUserId   String?            @db.Uuid
+  createdAt         DateTime           @default(now())
+
+  @@index([applicationId])
+}
+
+model Appointment {
+  id                String            @id @default(uuid()) @db.Uuid
+  branchId          String            @db.Uuid
+  type              AppointmentType   @default(INTERVIEW)
+  status            AppointmentStatus @default(SCHEDULED)
+  subject           String
+  location          String?
+  scheduledAt       DateTime
+  durationMinutes   Int?
+  notes             String?
+  rescheduleCount   Int               @default(0)
+  applicationId     String?           @db.Uuid
+  application       Application?      @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  customerId        String?           @db.Uuid
+  customer          Customer?         @relation("AppointmentCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  assignedToUserId  String?           @db.Uuid
+  createdById       String?           @db.Uuid
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  deletedAt         DateTime?
+
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([applicationId])
+  @@index([branchId])
+}
+
+// =====================================================================
+// PARTNERS (M3)
+// =====================================================================
+
+enum SupplierType {
+  AIRLINE
+  HOTEL
+  EMBASSY
+  TRANSPORT
+  INSURANCE
+  VISA_AGENT
+  OTHER
+}
+
+enum CommissionType {
+  PERCENTAGE
+  FLAT
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+model Supplier {
+  id            String       @id @default(uuid()) @db.Uuid
+  name          String
+  type          SupplierType @default(OTHER)
+  email         String?
+  phone         String?
+  country       String?
+  city          String?
+  website       String?
+  contactPerson String?
+  taxNumber     String?
+  notes         String?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+
+  @@index([type])
+}
+
+model Agent {
+  id              String         @id @default(uuid()) @db.Uuid
+  name            String
+  company         String?
+  email           String?
+  phone           String?
+  city            String?
+  country         String?
+  contactPerson   String?
+  commissionType  CommissionType @default(PERCENTAGE)
+  commissionRate  Decimal?       @db.Decimal(6, 2)
+  currencyCode    String         @default("USD")
+  notes           String?
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  commissions Commission[]
+
+  @@index([name])
+}
+
+// =====================================================================
+// TRAVEL (M4)
+// =====================================================================
+
+enum BookingType {
+  FLIGHT
+  HOTEL
+  PACKAGE
+  VISA
+  TRANSFER
+  TOUR
+  MIXED
+}
+
+enum BookingStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum BookingItemType {
+  FLIGHT
+  HOTEL
+  PACKAGE
+  VISA
+  SERVICE
+  TRANSFER
+  TAX
+  OTHER
+}
+
+model Flight {
+  id               String    @id @default(uuid()) @db.Uuid
+  airline          String
+  flightNumber     String
+  originCity       String?
+  originAirport    String?
+  destinationCity  String?
+  destinationAirport String?
+  departureTime    DateTime?
+  arrivalTime      DateTime?
+  classType        String?
+  baseFare         Decimal?  @db.Decimal(12, 2)
+  currencyCode     String    @default("USD")
+  seatsAvailable   Int?
+  notes            String?
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  @@index([airline])
+}
+
+enum CabinClass {
+  ECONOMY
+  PREMIUM_ECONOMY
+  BUSINESS
+  FIRST
+}
+
+enum MarginType {
+  PERCENT
+  FLAT
+}
+
+model Airport {
+  id         String   @id @default(uuid()) @db.Uuid
+  iataCode   String   @unique @db.VarChar(3)
+  name       String
+  city       String?
+  country    String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  faresOrigin      FlightFare[] @relation("FareOrigin")
+  faresDestination FlightFare[] @relation("FareDestination")
+
+  @@index([city])
+  @@index([country])
+}
+
+model Airline {
+  id                 String     @id @default(uuid()) @db.Uuid
+  code               String     @unique
+  name               String
+  country            String?
+  defaultMarginType  MarginType?
+  defaultMarginValue Decimal?   @db.Decimal(12, 2)
+  isActive           Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  fares FlightFare[]
+
+  @@index([name])
+}
+
+model FlightFare {
+  id                 String     @id @default(uuid()) @db.Uuid
+  airlineId          String     @db.Uuid
+  airline            Airline    @relation(fields: [airlineId], references: [id])
+  flightNumber       String
+  originAirportId    String     @db.Uuid
+  originAirport      Airport    @relation("FareOrigin", fields: [originAirportId], references: [id])
+  destinationAirportId String   @db.Uuid
+  destinationAirport Airport    @relation("FareDestination", fields: [destinationAirportId], references: [id])
+  departureTime      DateTime
+  arrivalTime        DateTime?
+  cabinClass         CabinClass @default(ECONOMY)
+  baseFare           Decimal    @db.Decimal(12, 2)
+  currencyCode       String     @default("USD")
+  currency           Currency   @relation(fields: [currencyCode], references: [code])
+  marginType         MarginType?
+  marginValue        Decimal?   @db.Decimal(12, 2)
+  taxPercent         Decimal    @default(0) @db.Decimal(5, 2)
+  seatsTotal         Int        @default(0)
+  seatsBooked        Int        @default(0)
+  notes              String?
+  isActive           Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  deletedAt          DateTime?
+
+  bookingItems BookingItem[]
+
+  @@unique([airlineId, flightNumber, originAirportId, destinationAirportId, departureTime, cabinClass])
+  @@index([originAirportId, destinationAirportId])
+  @@index([departureTime])
+}
+
+model Hotel {
+  id             String    @id @default(uuid()) @db.Uuid
+  name           String
+  city           String?
+  country        String?
+  address        String?
+  starRating     Int?
+  roomType       String?
+  ratePerNight   Decimal?  @db.Decimal(12, 2)
+  currencyCode   String    @default("USD")
+  roomsAvailable Int?
+  contactPhone   String?
+  notes          String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  @@index([city])
+}
+
+model Package {
+  id             String    @id @default(uuid()) @db.Uuid
+  name           String
+  code           String?   @unique
+  type           String?
+  destination    String?
+  durationDays   Int?
+  price          Decimal?  @db.Decimal(12, 2)
+  currencyCode   String    @default("USD")
+  includes       String?
+  description    String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  @@index([type])
+}
+
+model Booking {
+  id              String        @id @default(uuid()) @db.Uuid
+  bookingNumber   String        @unique
+  branchId        String        @db.Uuid
+  type            BookingType   @default(FLIGHT)
+  status          BookingStatus @default(DRAFT)
+  customerId      String        @db.Uuid
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  applicationId   String?       @db.Uuid
+  travelDate      DateTime?
+  returnDate      DateTime?
+  paxCount        Int           @default(1)
+  currencyCode    String        @default("USD")
+  subtotal        Decimal       @default(0) @db.Decimal(12, 2)
+  discount        Decimal       @default(0) @db.Decimal(12, 2)
+  tax             Decimal       @default(0) @db.Decimal(12, 2)
+  totalAmount     Decimal       @default(0) @db.Decimal(12, 2)
+  paidAmount      Decimal       @default(0) @db.Decimal(12, 2)
+  paymentStatus   String        @default("UNPAID")
+  notes           String?
+  assignedToUserId String?      @db.Uuid
+  createdById     String?       @db.Uuid
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  items       BookingItem[]
+  documents   Document[]    @relation("DocumentBooking")
+  quotations  Quotation[]
+  commissions Commission[]
+  invoices    Invoice[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([branchId])
+}
+
+model BookingItem {
+  id           String          @id @default(uuid()) @db.Uuid
+  bookingId    String          @db.Uuid
+  booking      Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  itemType     BookingItemType @default(OTHER)
+  refId        String?         @db.Uuid
+  fareId       String?         @db.Uuid
+  fare         FlightFare?     @relation(fields: [fareId], references: [id])
+  unitBasePrice Decimal?       @db.Decimal(12, 2)
+  description  String
+  quantity     Int             @default(1)
+  unitPrice    Decimal         @default(0) @db.Decimal(12, 2)
+  lineTotal    Decimal         @default(0) @db.Decimal(12, 2)
+  currencyCode String          @default("USD")
+  notes        String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([bookingId])
+}
+
+// =====================================================================
+// FINANCE (M5)
+// =====================================================================
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CONVERTED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  CHEQUE
+  ONLINE
+  ADJUSTMENT
+}
+
+enum PaymentStatus {
+  COMPLETED
+  PENDING
+  FAILED
+  REFUNDED
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Quotation {
+  id              String          @id @default(uuid()) @db.Uuid
+  quotationNumber String          @unique
+  branchId        String          @db.Uuid
+  customerId      String          @db.Uuid
+  customer        Customer        @relation(fields: [customerId], references: [id])
+  bookingId       String?         @db.Uuid
+  booking         Booking?        @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  status          QuotationStatus @default(DRAFT)
+  validUntil      DateTime?
+  currencyCode    String          @default("USD")
+  subtotal        Decimal         @default(0) @db.Decimal(12, 2)
+  discount        Decimal         @default(0) @db.Decimal(12, 2)
+  tax             Decimal         @default(0) @db.Decimal(12, 2)
+  totalAmount     Decimal         @default(0) @db.Decimal(12, 2)
+  notes           String?
+  sentAt          DateTime?
+  acceptedAt      DateTime?
+  convertedAt     DateTime?
+  invoiceId       String?         @db.Uuid
+  createdById     String?         @db.Uuid
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+
+  items QuotationItem[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([bookingId])
+}
+
+model QuotationItem {
+  id           String          @id @default(uuid()) @db.Uuid
+  quotationId  String          @db.Uuid
+  quotation    Quotation       @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  itemType     BookingItemType @default(OTHER)
+  refId        String?         @db.Uuid
+  description  String
+  quantity     Int             @default(1)
+  unitPrice    Decimal         @default(0) @db.Decimal(12, 2)
+  lineTotal    Decimal         @default(0) @db.Decimal(12, 2)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([quotationId])
+}
+
+model Invoice {
+  id            String        @id @default(uuid()) @db.Uuid
+  invoiceNumber String        @unique
+  branchId      String        @db.Uuid
+  customerId    String        @db.Uuid
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  quotationId   String?       @db.Uuid
+  bookingId     String?       @db.Uuid
+  booking       Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  status        InvoiceStatus @default(DRAFT)
+  issueDate     DateTime      @default(now())
+  dueDate       DateTime?
+  currencyCode  String        @default("USD")
+  subtotal      Decimal       @default(0) @db.Decimal(12, 2)
+  discount      Decimal       @default(0) @db.Decimal(12, 2)
+  tax           Decimal       @default(0) @db.Decimal(12, 2)
+  totalAmount   Decimal       @default(0) @db.Decimal(12, 2)
+  paidAmount    Decimal       @default(0) @db.Decimal(12, 2)
+  balanceDue    Decimal       @default(0) @db.Decimal(12, 2)
+  notes         String?
+  sentAt        DateTime?
+  cancelledAt   DateTime?
+  createdById   String?       @db.Uuid
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+
+  items       InvoiceItem[]
+  payments    Payment[]
+  commissions Commission[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([branchId])
+}
+
+model InvoiceItem {
+  id          String    @id @default(uuid()) @db.Uuid
+  invoiceId   String    @db.Uuid
+  invoice     Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Int       @default(1)
+  unitPrice   Decimal   @default(0) @db.Decimal(12, 2)
+  lineTotal   Decimal   @default(0) @db.Decimal(12, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id             String         @id @default(uuid()) @db.Uuid
+  paymentNumber  String         @unique
+  branchId       String         @db.Uuid
+  invoiceId      String         @db.Uuid
+  invoice        Invoice        @relation(fields: [invoiceId], references: [id])
+  customerId     String?        @db.Uuid
+  amount         Decimal        @db.Decimal(12, 2)
+  currencyCode   String         @default("USD")
+  method         PaymentMethod  @default(CASH)
+  status         PaymentStatus  @default(COMPLETED)
+  paidAt         DateTime       @default(now())
+  reference      String?
+  notes          String?
+  isRefund       Boolean        @default(false)
+  refundedAmount Decimal        @default(0) @db.Decimal(12, 2)
+  createdById    String?        @db.Uuid
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  @@index([invoiceId])
+  @@index([status])
+  @@index([branchId])
+}
+
+model Expense {
+  id               String        @id @default(uuid()) @db.Uuid
+  expenseNumber    String        @unique
+  branchId         String        @db.Uuid
+  category         String
+  supplierId       String?       @db.Uuid
+  title            String?
+  amount           Decimal       @db.Decimal(12, 2)
+  currencyCode     String        @default("USD")
+  expenseDate      DateTime      @default(now())
+  status           ExpenseStatus @default(PENDING)
+  paymentMethod    PaymentMethod?
+  description      String?
+  receiptUrl       String?
+  approvedByUserId String?       @db.Uuid
+  approvedAt       DateTime?
+  createdById      String?       @db.Uuid
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+
+  @@index([status])
+  @@index([branchId])
+  @@index([category])
+}
+
+model Commission {
+  id               String           @id @default(uuid()) @db.Uuid
+  commissionNumber String           @unique
+  branchId         String           @db.Uuid
+  agentId          String           @db.Uuid
+  agent            Agent            @relation(fields: [agentId], references: [id])
+  bookingId        String?          @db.Uuid
+  booking          Booking?         @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  invoiceId        String?          @db.Uuid
+  invoice          Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  type             CommissionType   @default(PERCENTAGE)
+  rate             Decimal?         @db.Decimal(6, 2)
+  baseAmount       Decimal          @default(0) @db.Decimal(12, 2)
+  amount           Decimal          @default(0) @db.Decimal(12, 2)
+  currencyCode     String           @default("USD")
+  status           CommissionStatus @default(PENDING)
+  notes            String?
+  approvedByUserId String?          @db.Uuid
+  approvedAt       DateTime?
+  paidAt           DateTime?
+  createdById      String?          @db.Uuid
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
+
+  @@index([agentId])
+  @@index([status])
+  @@index([bookingId])
+}
+
+// =====================================================================
+// DOCUMENTS + COMMUNICATIONS (M6)
+// =====================================================================
+
+enum DocumentType {
+  PASSPORT
+  CNIC
+  B_FORM
+  PHOTO
+  APPLICATION_FORM
+  AIR_TICKET
+  HOTEL_VOUCHER
+  INSURANCE
+  MEDICAL
+  POLICE_CERTIFICATE
+  BANK_STATEMENT
+  COVER_LETTER
+  NOC
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum CommunicationDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CommunicationStatus {
+  PENDING
+  SENT
+  FAILED
+  RECEIVED
+}
+
+model Document {
+  id               String         @id @default(uuid()) @db.Uuid
+  branchId         String         @db.Uuid
+  type             DocumentType   @default(OTHER)
+  title            String
+  fileName         String
+  storageKey       String
+  mimeType         String?
+  sizeBytes        Int?
+  status           DocumentStatus @default(PENDING)
+  expiryDate       DateTime?
+  customerId       String?        @db.Uuid
+  customer         Customer?      @relation("DocumentCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  applicationId    String?        @db.Uuid
+  application      Application?   @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  bookingId        String?        @db.Uuid
+  booking          Booking?       @relation("DocumentBooking", fields: [bookingId], references: [id], onDelete: SetNull)
+  verifiedByUserId String?        @db.Uuid
+  verifiedAt       DateTime?
+  rejectReason     String?
+  uploadedByUserId String?        @db.Uuid
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+
+  @@index([status])
+  @@index([customerId])
+  @@index([applicationId])
+  @@index([bookingId])
+}
+
+model Communication {
+  id              String                 @id @default(uuid()) @db.Uuid
+  branchId        String                 @db.Uuid
+  channel         Channel                @default(CALL)
+  direction       CommunicationDirection @default(OUTBOUND)
+  subject         String
+  body            String?
+  status          CommunicationStatus    @default(SENT)
+  occurredAt      DateTime               @default(now())
+  customerId      String?                @db.Uuid
+  customer        Customer?              @relation("CommCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  leadId          String?                @db.Uuid
+  lead            Lead?                  @relation("CommLead", fields: [leadId], references: [id], onDelete: SetNull)
+  applicationId   String?                @db.Uuid
+  application     Application?           @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  createdById     String?                @db.Uuid
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  deletedAt       DateTime?
+
+  @@index([customerId])
+  @@index([applicationId])
+  @@index([status])
+}

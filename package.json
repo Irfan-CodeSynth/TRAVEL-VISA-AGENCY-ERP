@@ -1,0 +1,36 @@
+{
+  "name": "travel-visa-erpcrm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Travel & Visa Agency ERP/CRM — Production System",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "build": "npm run build --workspace=server && npm run build --workspace=client",
+    "build:server": "npm run build --workspace=server",
+    "build:client": "npm run build --workspace=client",
+    "db:migrate": "npm run db:migrate --workspace=server",
+    "db:seed": "npm run db:seed --workspace=server",
+    "db:studio": "npm run db:studio --workspace=server",
+    "lint": "npm run lint --workspace=server && npm run lint --workspace=client",
+    "db:up": "node scripts/start-db.mjs",
+    "db:push": "npm run db:push --workspace=server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "embedded-postgres": "^17.10.0-beta.17",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "allowScripts": {
+    "@embedded-postgres/windows-x64@17.10.0-beta.17": true,
+    "esbuild": true
+  }
+}
